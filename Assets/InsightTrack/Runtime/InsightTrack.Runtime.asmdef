@@ -1,0 +1,16 @@
+{
+    "name": "InsightTrack.Runtime",
+    "rootNamespace": "MbsCore",
+    "references": [
+        "GUID:761d5bf75d8d34c67915e9273aef7f77"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

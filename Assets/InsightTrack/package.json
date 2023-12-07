@@ -1,0 +1,24 @@
+{
+    "name": "com.danilchizhikov.insight-track",
+    "displayName": "InsightTrack",
+    "version": "0.0.1",
+    "unity": "2022.3",
+    "dependencies": {},
+    "description": "An lightweight system for implementing various analytics services.",
+    "keywords": [
+        "Analytics",
+        "InsightTrack"
+    ],
+    "category": "Tools",
+    "author": "MbsCore",
+    "repository": {
+        "type": "git",
+        "url": "ssh://github.com:DanilChizhikov/InsightTrack.git",
+        "directory": "com.danilchizhikov.insight-track"
+    },
+    "publishConfig": {
+        "registry": "https://npm.pkg.github.com/@DanilChizhikov"
+    },
+    "license": "MIT"
+  }
+  

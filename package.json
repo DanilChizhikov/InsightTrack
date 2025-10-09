@@ -3,7 +3,6 @@
     "displayName": "InsightTrack",
     "version": "0.0.1",
     "unity": "2022.3",
-    "dependencies": {},
     "description": "An lightweight system for implementing various analytics services.",
     "keywords": [
         "Analytics",
@@ -20,5 +19,4 @@
         "registry": "https://npm.pkg.github.com/@DanilChizhikov"
     },
     "license": "MIT"
-  }
-  
+}

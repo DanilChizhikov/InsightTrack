@@ -1,120 +1,139 @@
 using System;
 using System.Collections.Generic;
-using MbsCore.InsightTrack.Infrastructure;
+using System.Runtime.ExceptionServices;
+using System.Threading;
+using System.Threading.Tasks;
+using UnityEngine;
+using UnityEngine.Pool;
 
-namespace MbsCore.InsightTrack.Runtime
+namespace DTech.InsightTrack
 {
-    public sealed class AnalyticsService : IAnalyticsService
+    public sealed class AnalyticsService : IAnalyticsService, IDisposable
     {
-        private readonly HashSet<IAnalyticsAdapter> _adapters;
-        private readonly Dictionary<string, object> _tempParams;
+        public event Action OnInitialized;
+        public event Action<ExceptionDispatchInfo> OnSendException;
+
+        private readonly List<IAnalyticsAdapter> _adapters;
+        private readonly Queue<IAnalyticEvent> _eventBuffer;
+        
+        public bool IsInitialized { get; private set; }
+        public bool IsSendingActive { get; private set; }
+
+        private CancellationTokenSource _bufferTokenSource;
 
         public AnalyticsService(IEnumerable<IAnalyticsAdapter> adapters)
         {
-            _adapters = new HashSet<IAnalyticsAdapter>(adapters);
-            _tempParams = new Dictionary<string, object>();
-        }
-
-        public AnalyticsService(params IAnalyticsAdapter[] adapters)
-        {
-            _adapters = new HashSet<IAnalyticsAdapter>(adapters);
-            _tempParams = new Dictionary<string, object>();
+            _adapters = new List<IAnalyticsAdapter>(adapters);
+            _eventBuffer = new Queue<IAnalyticEvent>();
+            IsSendingActive = false;
         }
         
-        public void Initialize()
+        public async Task InitializeAsync(CancellationToken cancellationToken)
         {
-            foreach (var adapter in _adapters)
-            {
-                adapter.Initialize();
-            }
-        }
-
-        public void SetUserProperty(string propName, string value)
-        {
-            if (string.IsNullOrEmpty(propName) || string.IsNullOrEmpty(value))
+            if (IsInitialized)
             {
                 return;
             }
-			
-            AdaptersBypass(AdapterSetUserProperty);
-            
-            void AdapterSetUserProperty(IAnalyticsAdapter adapter)
+
+            List<IAnalyticsAdapter> adapters = ListPool<IAnalyticsAdapter>.Get();
+            adapters.Clear();
+            adapters.AddRange(_adapters);
+            adapters.Sort((x, y) => x.InitializeOrder.CompareTo(y.InitializeOrder));
+            for (int i = 0; i < adapters.Count; i++)
             {
-                adapter.SetUserProperty(propName, value);
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    for (int j = 0; j < i; j++)
+                    {
+                        IAnalyticsAdapter analyticsAdapter = adapters[j];
+                        analyticsAdapter.Dispose();
+                    }
+                    
+                    break;
+                }
+                
+                IAnalyticsAdapter adapter = adapters[i];
+                await adapter.InitializeAsync(cancellationToken);
+            }
+            
+            adapters.Clear();
+            ListPool<IAnalyticsAdapter>.Release(adapters);
+            IsInitialized = !cancellationToken.IsCancellationRequested;
+            if (IsInitialized)
+            {
+                OnInitialized?.Invoke();
             }
         }
 
-        public void SendEvent(string eventName)
+        public void SetSendingActive(bool isActive)
         {
-            SendEvent(eventName, string.Empty);
+            IsSendingActive = isActive;
+            if (IsSendingActive)
+            {
+                _bufferTokenSource?.Cancel();
+                _bufferTokenSource?.Dispose();
+                _bufferTokenSource = new CancellationTokenSource();
+                Task.Run(() => SendBufferAsync(_bufferTokenSource.Token));
+            }
         }
 
-        public void SendEvent(string eventName, string eventValue)
+        public void SendEvent(IAnalyticEvent analyticEvent)
         {
-            Send(eventName, eventValue);
-        }
+            if (!IsSendingActive)
+            {
+                _eventBuffer.Enqueue(analyticEvent);
+                return;
+            }
 
-        public void SendEventParams(string eventName, string paramName, object paramValue)
-        {
-            SendParams(eventName, paramName, paramValue);
-        }
-
-        public void SendEventParams(string eventName, string eventValue, IDictionary<string, object> parameters)
-        {
-            SendParams(eventName, eventValue, parameters);
-        }
-
-        public void SendEventParams(string eventName, IDictionary<string, object> parameters)
-        {
-            SendParams(eventName, string.Empty, parameters);
+            Task.Run(() => SendEventAsync(analyticEvent));
         }
 
         public void Dispose()
         {
-            _tempParams.Clear();
-            foreach (var adapter in _adapters)
+            _bufferTokenSource?.Cancel();
+            _bufferTokenSource?.Dispose();
+            _bufferTokenSource = null;
+            
+            for (int i = 0; i < _adapters.Count; i++)
             {
-                adapter.DeInitialize();
+                IAnalyticsAdapter adapter = _adapters[i];
+                adapter.Dispose();
             }
             
             _adapters.Clear();
         }
         
-        private void Send(string id, string value)
+        private async Task SendBufferAsync(CancellationToken cancellationToken)
         {
-            AdaptersBypass(AdapterSendEventComplex);
-
-            void AdapterSendEventComplex(IAnalyticsAdapter adapter)
+            while (_eventBuffer.TryDequeue(out IAnalyticEvent analyticEvent))
             {
-                adapter.SendEvent(id, value);
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    break;
+                }
+                
+                await SendEventAsync(analyticEvent);
             }
-        }
-		
-        private void SendParams(string eventId, string eventValue, IDictionary<string, object> parameters)
-        {
-            AdaptersBypass(AdapterSendEventParam);
-
-            void AdapterSendEventParam(IAnalyticsAdapter adapter)
-            {
-                adapter.SendEventParam(eventId, eventValue, parameters);
-            }
-        }
-		
-        private void SendParams(string eventId, string paramName, object paramValue)
-        {
-            _tempParams.Clear();
-            _tempParams.Add(paramName, paramValue);
-            SendEventParams(eventId, string.Empty, _tempParams);
+            
+            _eventBuffer.Clear();
         }
         
-        private void AdaptersBypass(Action<IAnalyticsAdapter> action)
+        private async Task SendEventAsync(IAnalyticEvent analyticEvent)
         {
-            foreach (IAnalyticsAdapter adapter in _adapters)
+            for (int i = 0; i < _adapters.Count; i++)
             {
-                if (adapter.IsInitialized)
+                IAnalyticsAdapter adapter = _adapters[i];
+                try
                 {
-                    action(adapter);   
+                    adapter.SendEvent(analyticEvent);
                 }
+                catch (Exception exception)
+                {
+                    OnSendException?.Invoke(ExceptionDispatchInfo.Capture(exception));
+                    Debug.LogException(exception);
+                }
+                
+                await Task.Yield();
             }
         }
     }

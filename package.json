@@ -1,7 +1,7 @@
 {
-    "name": "com.danilchizhikov.insight-track",
+    "name": "com.dtech.insight-track",
     "displayName": "InsightTrack",
-    "version": "0.0.1",
+    "version": "1.0.0",
     "unity": "2022.3",
     "description": "An lightweight system for implementing various analytics services.",
     "keywords": [
@@ -13,7 +13,7 @@
     "repository": {
         "type": "git",
         "url": "ssh://github.com:DanilChizhikov/InsightTrack.git",
-        "directory": "com.danilchizhikov.insight-track"
+        "directory": "com.dtech"
     },
     "publishConfig": {
         "registry": "https://npm.pkg.github.com/@DanilChizhikov"

@@ -2,18 +2,64 @@
 ![](https://img.shields.io/badge/unity-2022.3+-000.svg)
 
 ## Description
-InsightTrack serves as a lightweight system for implementing any analytics into a project and the ability to combine them,
-without having to add new event dispatch points to the code for each of them.
+A universal analytical service that allows you to send events to all connected adapters simultaneously.
+It has the function of enabling/disabling event sending, they will accumulate in the internal buffer.
 
 ## Table of Contents
 - [Getting Started](#Getting-Started)
     - [Install manually (using .unitypackage)](#Install-manually-(using-.unitypackage))
     - [Install via UPM (using Git URL)](#Install-via-UPM-(using-Git-URL))
-- [Basic Usage](#Basic-Usage)
-    - [Initialization](#Initialization)
-    - [Custom Adapters & Configs](#Custom-Adapters-&-Configs)
-    - [AnalyticsService Methods](#AnalyticsService-Methods)
-    - [Use AnalyticsEvent in Inspector](#Use-AnalyticsEvent-in-Inspector)
+- [Features](#Features)
+- [API Reference](#api-reference)
+  - [Core Interfaces](#core-interfaces)
+  - [Base Classes](#base-classes)
+  - [Usage Example](#usage-example)
+
+#### `IAnalyticsService`
+Main service interface for sending analytics events.
+
+**Properties:**
+- `bool IsInitialized` - Indicates if the service has been initialized
+- `bool IsSendingActive` - Gets or sets whether events should be sent immediately
+
+**Events:**
+- `event Action OnInitialized` - Triggered when the service is fully initialized
+- `event Action<ExceptionDispatchInfo> OnSendException` - Triggered when an exception occurs while sending events
+
+**Methods:**
+- `Task InitializeAsync(CancellationToken cancellationToken)`
+    - Initializes the analytics service asynchronously
+    - `cancellationToken`: Token to cancel the initialization
+
+- `void SetSendingActive(bool isActive)`
+    - Enables or disables sending of analytics events
+    - `isActive`: Whether to enable or disable sending events
+
+- `void SendEvent(IAnalyticEvent analyticEvent)`
+    - Sends an analytics event
+    - `analyticEvent`: The event to send
+
+#### `IAnalyticsAdapter`
+Interface for analytics service adapters.
+
+**Properties:**
+- `bool IsInitialized` - Indicates if the adapter has been initialized
+- `int InitializeOrder` - The order in which this adapter should be initialized (lower numbers first)
+
+**Methods:**
+- `Task InitializeAsync(CancellationToken cancellationToken)`
+    - Initializes the adapter asynchronously
+    - `cancellationToken`: Token to cancel the initialization
+
+- `void SendEvent(IAnalyticEvent value)`
+    - Sends an analytics event
+    - `value`: The event to send
+
+#### `IAnalyticEvent`
+Base interface for all analytics events.
+
+**Properties:**
+- `string Name` - The name of the event]
 - [License](#License)
 
 ## Getting Started
@@ -23,106 +69,182 @@ Prerequisites:
 
 ### Install manually (using .unitypackage)
 1. Download the .unitypackage from [releases](https://github.com/DanilChizhikov/InsightTrack/releases/) page.
-2. Open InsightTrack.x.x.x.unitypackage
+2. Open com.dtech.insight-track.x.x.x.unitypackage
 
 ### Install via UPM (using Git URL)
 1. Navigate to your project's Packages folder and open the manifest.json file.
-2. Add this line below the "dependencies": { line
-    - ```json title="Packages/manifest.json"
-      "com.danilchizhikov.insight-track": "https://github.com/DanilChizhikov/InsightTrack.git?path=Assets/InsightTrack#0.0.1",
+2. Add the following line to the dependencies section:
+    - ```json
+      "com.dtech.insight-track": "https://github.com/DanilChizhikov/InsightTrack.git",
       ```
-UPM should now install the package.
+3. Unity will automatically import the package.
 
-## Basic Usage
+If you want to set a target version, InsightTrack uses the `v*.*.*` release tag so you can specify a version like #v2.0.0.
 
-### Initialization
-First, you need to initialize the AnalyticsService, this can be done using different methods.
-Here we will show the easiest way, which is not the method that we recommend using!
+For example `https://github.com/DanilChizhikov/InsightTrack.git#v1.0.0`.
+
+## Features
+
+- **Modular Design**: Easily add or remove analytics adapters
+- **Asynchronous Initialization**: Non-blocking initialization of analytics services
+- **Event Buffering**: Events are buffered until the service is ready
+- **Exception Handling**: Built-in error handling and reporting
+- **Dependency Injection** ready
+
+## API Reference
+
+### Core Interfaces
+
+#### `IAnalyticsService`
+Main service interface for sending analytics events.
+
+**Properties:**
+- `bool IsInitialized` - Indicates if the service has been initialized
+- `bool IsSendingActive` - Gets or sets whether events should be sent immediately
+
+**Events:**
+- `event Action OnInitialized` - Triggered when the service is fully initialized
+- `event Action<ExceptionDispatchInfo> OnSendException` - Triggered when an exception occurs while sending events
+
+**Methods:**
+- `Task InitializeAsync(CancellationToken cancellationToken)`
+    - Initializes the analytics service asynchronously
+    - `cancellationToken`: Token to cancel the initialization
+
+- `void SetSendingActive(bool isActive)`
+    - Enables or disables sending of analytics events
+    - `isActive`: Whether to enable or disable sending events
+
+- `void SendEvent(IAnalyticEvent analyticEvent)`
+    - Sends an analytics event
+    - `analyticEvent`: The event to send
+
+#### `IAnalyticsAdapter`
+Interface for analytics service adapters.
+
+**Properties:**
+- `bool IsInitialized` - Indicates if the adapter has been initialized
+- `int InitializeOrder` - The order in which this adapter should be initialized (lower numbers first)
+
+**Methods:**
+- `Task InitializeAsync(CancellationToken cancellationToken)`
+    - Initializes the adapter asynchronously
+    - `cancellationToken`: Token to cancel the initialization
+
+- `void SendEvent(IAnalyticEvent value)`
+    - Sends an analytics event
+    - `value`: The event to send
+
+#### `IAnalyticEvent`
+Base interface for all analytics events.
+
+**Properties:**
+- `string Name` - The name of the event
+
+### Base Classes
+
+#### `AnalyticsAdapter`
+Abstract base class for analytics adapters.
+
+**Properties:**
+- `bool IsInitialized` - Indicates if the adapter has been initialized
+- `virtual int InitializeOrder` - The order in which this adapter should be initialized (default: 0)
+
+**Methods:**
+- `Task InitializeAsync(CancellationToken cancellationToken)`
+    - Initializes the adapter and processes any buffered events
+
+- `abstract void SendEvent(IAnalyticEvent value)`
+    - Sends an analytics event
+
+- `virtual void Dispose()`
+    - Cleans up resources used by the adapter
+
+- `protected virtual Task InitializeProcessingAsync(CancellationToken cancellationToken)`
+    - Performs any async initialization required by the adapter
+    - Returns: A Task that completes when initialization is done
+
+- `protected abstract void SendBufferEvents()`
+    - Sends all buffered events
+
+#### `AnalyticsAdapter<TEvent>`
+Generic abstract base class for typed analytics adapters.
+
+**Methods:**
+- `override void SendEvent(IAnalyticEvent value)`
+    - Sends a typed analytics event
+    - `value`: The event to send (must be of type TEvent)
+
+- `protected abstract void SendEvent(TEvent value)`
+    - Sends a typed analytics event
+    - `value`: The event to send
+
+### Concrete Implementations
+
+#### `AnalyticsService`
+Default implementation of `IAnalyticsService`.
+
+**Constructor:**
+- `AnalyticsService(IEnumerable<IAnalyticsAdapter> adapters)`
+    - Creates a new instance of the analytics service
+    - `adapters`: Collection of analytics adapters to use
+
+## Usage Example
+
 ```csharp
-public sealed class AnalyticsServiceBootstrap : MonoBehaviour
+// Create adapters
+var adapters = new List
 {
-    [SerializeField] private ExampleConfig _config = default;
-    
-    private static IAnalyticsService _service;
+    new MyAnalyticsAdapter1(),
+    new MyAnalyticsAdapter2()
+};
 
-    public static IAnalyticsService Service => _service;
+// Create and initialize the service
+var analyticsService = new AnalyticsService(adapters);
+var cts = new CancellationTokenSource();
+await analyticsService.InitializeAsync(cts.Token);
 
-    private void Awake()
+// Enable event sending
+analyticsService.SetSendingActive(true);
+
+// Send an event
+analyticsService.SendEvent(new MyCustomEvent("player_level_up", 42));
+```
+
+## Creating Custom Events
+
+```csharp
+public readonly struct MyCustomEvent : IAnalyticEvent
+{
+    public string Name { get; }
+    public int Level { get; }
+
+    public MyCustomEvent(string name, int level)
     {
-        if (_service != null)
-        {
-            Destroy(gameObject);
-            return;
-        }
-
-        var exampleAdapter = new ExampleAdapter(_config);
-        _service = new AnalyticsService(exampleAdapter);
-        _service.Initialize();
+        Name = name;
+        Level = level;
     }
 }
 ```
 
-### Custom Adapters & Configs
-In order to create your own custom config for the analytics adapter, 
-it is enough to inherit from the abstract AnalyticsConfig class or IAnalyticsConfig interface.
-Example Config:
-```csharp
-public sealed class ExampleConfig : AnalyticsConfig
-{
-    // Yours config data
-}
-```
+## Creating Custom Adapters
 
-In order to create your own custom analytics adapter, you can use two options, 
-inherit from the ready-made abstract class AnalyticsAdapter<TConfig>, which accepts the IAnalyticsConfig as a generic parameter, 
-or you can inherit from the IAnalyticsAdapter interface and implement all the methods yourself.
-Example Adapter:
 ```csharp
-public sealed class ExampleAdapter : AnalyticsAdapter<ExampleConfig>
+public class MyAnalyticsAdapter : AnalyticsAdapter<MyAnalyticEvent>
 {
-    public ExampleAdapter(ExampleConfig config) : base(config) { }
-    
-    protected override void Send(string eventName, string value)
+    protected override Task InitializeProcessingAsync(CancellationToken cancellationToken)
     {
-        // some code...
+        // Initialize your analytics SDK here
+        return Task.CompletedTask;
     }
-}
-```
 
-### AnalyticsService Methods
-
-```csharp
-public interface IAnalyticsService : IDisposable
-{
-    //Need call for initialization system
-    void Initialize();
-    //Allows you to set a value to a custom custom property
-    void SetUserProperty(string propName, string value);
-    //Sends an analytical event to those systems that have it, the value in this case will be empty
-    void SendEvent(string eventName);
-    //Sends an analytical event with a value to those systems that have such a value
-    void SendEvent(string eventName, string eventValue);
-    //Sends an analytical event with parameters of the Key Value Pair type, while the event value will be empty
-    void SendEventParams(string eventName, string paramName, object paramValue);
-    //Sends an analytical event with an event value and a data set as KeyValuePairs
-    void SendEventParams(string eventName, string eventValue, IDictionary<string, object> parameters);
-    //Sends an analytical event with a set of data as KeyValuePairs, while the event value will be empty
-    void SendEventParams(string eventName, IDictionary<string, object> parameters);
-}
-```
-
-### Use AnalyticsEvent in Inspector
-
-Also, analytical events can be selected from the inspector,
-which allows you not to use writing event names directly in the code
-
-```csharp
-public sealed class Example : MonoBehaviour
-{
-    [SerializeField, AnalyticsEvent] private string _event = string.Empty;
+    protected override void SendEvent(MyAnalyticEvent value)
+    {
+        // Send the event to your analytics service
+        Debug.Log($"Sending event: {value.Name}");
+    }
 }
 ```
 
 ## License
-
-MIT
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.

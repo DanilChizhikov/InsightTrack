@@ -1,86 +1,68 @@
 using System.Collections.Generic;
-using MbsCore.InsightTrack.Infrastructure;
+using System.Threading;
+using System.Threading.Tasks;
 
-namespace MbsCore.InsightTrack.Runtime
+namespace DTech.InsightTrack
 {
     public abstract class AnalyticsAdapter : IAnalyticsAdapter
     {
-        public bool IsInitialized { get; private set; }
-        
-        protected EventConcatBuilder EventConcatBuilder { get; }
+        public bool IsInitialized { get; private set; } = false;
+        public virtual int InitializeOrder => 0;
 
-        public AnalyticsAdapter()
-        {
-            IsInitialized = false;
-            EventConcatBuilder = new EventConcatBuilder();
-        }
-
-        public void Initialize()
+        public async Task InitializeAsync(CancellationToken cancellationToken)
         {
             if (IsInitialized)
             {
                 return;
             }
             
-            InitializeProcessing();
-            IsInitialized = true;
-        }
-
-        public virtual void SetUserProperty(string propName, string value) { }
-
-        public abstract void SendEvent(string eventName, string value);
-
-        public abstract void SendEventParam(string eventName, string value, IDictionary<string, object> eventParameters);
-
-        public void DeInitialize()
-        {
-            if (!IsInitialized)
+            await InitializeProcessingAsync(cancellationToken);
+            IsInitialized = !cancellationToken.IsCancellationRequested;
+            if (IsInitialized)
             {
-                return;
+                SendBufferEvents();
             }
-            
-            IsInitialized = false;
-            DeInitializeProcessing();
         }
 
-        protected virtual void Send(string eventName, string value, IDictionary<string, object> eventParameters) {}
-		
-        protected abstract void Send(string eventName, string value);
+        public abstract void SendEvent(IAnalyticEvent value);
         
-        protected virtual void InitializeProcessing() { }
-        protected virtual void DeInitializeProcessing() { }
+        public virtual void Dispose() { }
+
+        protected virtual Task InitializeProcessingAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+        protected abstract void SendBufferEvents();
     }
-
-    public abstract class AnalyticsAdapter<TConfig> : AnalyticsAdapter where TConfig : IAnalyticsConfig
+    
+    public abstract class AnalyticsAdapter<TEvent> : AnalyticsAdapter
+        where TEvent : struct, IAnalyticEvent
     {
-        private readonly HashSet<string> _events;
+        private readonly Queue<TEvent> _eventBuffer = new ();
         
-        protected TConfig Config { get; }
-
-        public AnalyticsAdapter(TConfig config)
+        public sealed override void SendEvent(IAnalyticEvent value)
         {
-            _events = new HashSet<string>(config.Events);
-            Config = config;
-        }
-
-        public sealed override void SendEvent(string eventName, string value)
-        {
-            if (!IsInitialized || !_events.Contains(eventName))
+            if (value is not TEvent generic)
             {
                 return;
             }
-            
-            Send(eventName, value);
+
+            if (IsInitialized)
+            {
+                SendEvent(generic);
+            }
+            else
+            {
+                _eventBuffer.Enqueue(generic);
+            }
         }
 
-        public sealed override void SendEventParam(string eventName, string value, IDictionary<string, object> eventParameters)
+        protected sealed override void SendBufferEvents()
         {
-            if (!IsInitialized || !_events.Contains(eventName))
+            while (_eventBuffer.TryDequeue(out TEvent analyticsEvent))
             {
-                return;
+                SendEvent(analyticsEvent);
             }
-            
-            Send(eventName, value, eventParameters);
         }
+
+        protected abstract void SendEvent(TEvent value);
     }
 }

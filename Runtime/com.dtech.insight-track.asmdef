@@ -1,13 +1,8 @@
 {
-    "name": "InsightTrack.Editor",
-    "rootNamespace": "MbsCore",
-    "references": [
-        "GUID:761d5bf75d8d34c67915e9273aef7f77",
-        "GUID:7a4de72d0c25d44ab81fc671950a35ad"
-    ],
-    "includePlatforms": [
-        "Editor"
-    ],
+    "name": "com.dtech.insight-track",
+    "rootNamespace": "DTech",
+    "references": [],
+    "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
     "overrideReferences": false,

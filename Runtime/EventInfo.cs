@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace MbsCore.InsightTrack.Runtime
+namespace DTech.InsightTrack
 {
     [Serializable]
     internal struct EventInfo

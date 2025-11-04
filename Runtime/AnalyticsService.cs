@@ -90,6 +90,10 @@ namespace DTech.InsightTrack
 
         public void Dispose()
         {
+            _bufferTokenSource?.Cancel();
+            _bufferTokenSource?.Dispose();
+            _bufferTokenSource = null;
+            
             for (int i = 0; i < _adapters.Count; i++)
             {
                 IAnalyticsAdapter adapter = _adapters[i];
